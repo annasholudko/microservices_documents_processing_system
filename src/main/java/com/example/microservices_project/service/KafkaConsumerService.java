@@ -1,6 +1,9 @@
 package com.example.microservices_project.service;
 
+import com.example.microservices_project.entity.Document;
 import com.example.microservices_project.enums.StatusEnum;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
@@ -23,15 +26,19 @@ public class KafkaConsumerService {
     }
 
     @KafkaListener(topics = "documents-topic", groupId = "documents-group")
-    public void listenDocUploading(String id) {
+    public void listenDocUploading(String message) {
         try {
-            logger.info("Processing document: " + id);
+            ObjectMapper objectMapper = new ObjectMapper();
+            Document doc = objectMapper.readValue(message, Document.class);
+            logger.info("Processing document: " + doc.getId());
             Thread.sleep(1000);
-            String res  = documentService.updateStatusById(id, StatusEnum.DONE.toString());
+            String res  = documentService.updateStatusById(Long.valueOf(doc.getId()), StatusEnum.DONE.toString());
             if ("OK".equals(res)){
                 logger.info("Status was updated");
             }
         } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
     }

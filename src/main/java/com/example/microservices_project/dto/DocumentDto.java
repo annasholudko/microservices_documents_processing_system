@@ -1,41 +1,46 @@
-package com.example.microservices_project.entity;
+package com.example.microservices_project.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.stereotype.Component;
 
 import java.util.Date;
+import java.sql.Timestamp;
 
-@Entity(name = "documents")
-public class Document {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+@Component
+public class DocumentDto {
     @JsonProperty("id")
-    private Long id;
+    private Long id; // якщо в Entity ти змінив на AUTO_INCREMENT
+
     @JsonProperty("name")
+    @NotNull
     private String name;
+
     @JsonProperty("status")
     private String status; // NEW, PROCESSING, DONE
+
     @JsonProperty("content")
     private String content; // base64 або локальний шлях
+
     @JsonProperty("author")
     private String author;
+
     @JsonProperty("create_at")
     private Date createAt;
 
-    public Document() {
+    public DocumentDto() {
     }
 
-    public Document(Long id, String name, String status, String content, String author) {
+    public DocumentDto(Long id, String name, String status, String content, String author, Date createAt) {
         this.id = id;
         this.name = name;
         this.status = status;
         this.content = content;
         this.author = author;
+        this.createAt = createAt;
     }
 
+    // Getters and Setters
     public Long getId() {
         return id;
     }
@@ -68,7 +73,6 @@ public class Document {
         this.content = content;
     }
 
-
     public String getAuthor() {
         return author;
     }
@@ -83,17 +87,5 @@ public class Document {
 
     public void setCreateAt(Date createAt) {
         this.createAt = createAt;
-    }
-
-    @Override
-    public String toString() {
-        return "Document{" +
-                "id='" + id + '\'' +
-                ", name='" + name + '\'' +
-                ", status='" + status + '\'' +
-                ", content='" + content + '\'' +
-                ", author='" + author + '\'' +
-                ", createAt=" + createAt +
-                '}';
     }
 }
