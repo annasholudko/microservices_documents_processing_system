@@ -3,12 +3,21 @@ package com.example.microservices_project.service;
 import com.example.microservices_project.dto.DocumentDto;
 import com.example.microservices_project.dto.DocumentMapper;
 import com.example.microservices_project.entity.Document;
+import com.example.microservices_project.entity.OutboxEvent;
+import com.example.microservices_project.enums.OutboxStatusEnum;
 import com.example.microservices_project.enums.StatusEnum;
 import com.example.microservices_project.repository.DocumentRepository;
+import com.example.microservices_project.repository.OutboxEventRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.transaction.Transactional;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -17,12 +26,21 @@ public class DocumentService {
     private RedisTemplate<String, Object> redisTemplate;
     private DocumentRepository documentRepository;
     private DocumentMapper documentMapper;
+    private OutboxEventRepository outboxEventRepository;
+    private ObjectMapper objectMapper;
+    private KafkaProducerService kafkaProducerService;
 
-    public DocumentService(RedisTemplate<String, Object> redisTemplate, DocumentRepository documentRepository, DocumentMapper documentMapper) {
+    public DocumentService(RedisTemplate<String, Object> redisTemplate, DocumentRepository documentRepository, DocumentMapper documentMapper, OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper, KafkaProducerService kafkaProducerService) {
         this.redisTemplate = redisTemplate;
         this.documentRepository = documentRepository;
         this.documentMapper = documentMapper;
+        this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
+        this.kafkaProducerService = kafkaProducerService;
     }
+
+
+
 
 /*    private final Map<String, Document> fakeDb = new HashMap<>(Map.of(
             "1", new Document("1", "title1", StatusEnum.NEW.toString(), "JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgaHR0cDovL3d3dy5yZXBvcnRsYWIuY29tCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiA0IDAgUiAvRjMgNSAwIFIgL0Y0IDYgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDEyIDAgUiAvTWVkaWFCb3ggWyAwIDAgNTk1LjI3NTYgODQxLjg4OTggXSAvUGFyZW50IDExIDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNSAwIG9iago8PAovQmFzZUZvbnQgL1phcGZEaW5nYmF0cyAvTmFtZSAvRjMgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9CYXNlRm9udCAvQ291cmllciAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjQgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db250ZW50cyAxMyAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCAxMSAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKOCAwIG9iago8PAovQ29udGVudHMgMTQgMCBSIC9NZWRpYUJveCBbIDAgMCA1OTUuMjc1NiA4NDEuODg5OCBdIC9QYXJlbnQgMTEgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjkgMCBvYmoKPDwKL1BhZ2VNb2RlIC9Vc2VOb25lIC9QYWdlcyAxMSAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjEwIDAgb2JqCjw8Ci9BdXRob3IgKFwoYW5vbnltb3VzXCkpIC9DcmVhdGlvbkRhdGUgKEQ6MjAyNTA4MjUxNDE1MDIrMDAnMDAnKSAvQ3JlYXRvciAoXCh1bnNwZWNpZmllZFwpKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAyNTA4MjUxNDE1MDIrMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIHd3dy5yZXBvcnRsYWIuY29tKSAKICAvU3ViamVjdCAoXCh1bnNwZWNpZmllZFwpKSAvVGl0bGUgKFwoYW5vbnltb3VzXCkpIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKMTEgMCBvYmoKPDwKL0NvdW50IDMgL0tpZHMgWyAzIDAgUiA3IDAgUiA4IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMTIgMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggNTkKPj4Kc3RyZWFtCkdhcFFoMEU9RiwwVVxIM1RccE5ZVF5RS2s/dGM+SVAsO1cjVTFeMjNpaFBFTV9QUCRPITNeLEM1UX4+ZW5kc3RyZWFtCmVuZG9iagoxMyAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCA4ODAKPj4Kc3RyZWFtCkdhdG04Oy9fcFgmOlZzLzM5PnVqKWxXb0JjbnFeclJuZk04WF9aVV1HXUNQa2dfLShwUDozSS1oZSpVYyEiJT80JVxzQVhHTWRnbXE9a01rVyNISmRkMlpPLjVsVkd0KUYsdFdBPUdJW2YuW1txOkU8REhcZlNAPjEtTnRYPC50W0wnRUtyVVcqNlFeO2hdOHIyI3VdT1c1MV8kVG4tXTdybTRVNitCREA/KCxdMilKcXEjYCIzVFk5RydVZDRrWzZeRyFDIyZ1V010QkldMD8mK2cucEsxJT1ST1c5PGpFUkgzTDJTT3FKTkQoOVFNUDRjaTM0YzYrcj1jWjctbzwwMCorJ3BLSFA2XyZsUEM/K0JiPERHRCRsOzJJZGBVKk9yKXBqRlJbJVJyS2tvQz9EKU5nYyNESmMzRkk2bzA3JnRFUCY2YztCVy5JXlM2JnAvW05KSSxtSUpLKTdqJy4sWWBDJGtUYltdNjpdTlAhZkpnKzUoQEpxZ3JnKWBhW109XGpRJFhZYyEnayR1VFNTUk1FOFhrLnE9PD5GO0xtZkdLMzlGQEA6NnRjVlZQImI6PU5pVHJdSU4nWFJUZjkkRjoxOlVSJ21SbCRsb1JzQGIsMWxbbUdqSClvOEpMLD47RyM5YnFCZzdOOzIxKV5mT0ZRSGAkPlYrWGZjLmpYX1dkLUUxN2RQWGw3YWVvY1csbG8sW29oXjhRMDNMXikwbFpzKzFrKDVIJTlgPmtJTiVBQkg2Zlg2U3JQaUpEb2FaPWU6bCIvQXJZKmwwSiImSisrMDJEcWVaWU8/PEtqZUUhZUZMLyRXIlVcRT0jZC5nSTwwLklbYyJQbzArTj5ASjczTCxqZ21vKVUpPXVuWFJeKlA0RlEoL2xtTGwtVl01bVheW0A5SyR0UjQ6NzVjNSdgKzQnNS8xIUEtc2UxTk8hP14hKzsoLnBHSmVMWFlIRyptPGAsaXRBcmkuVE4lbEJVWTJbZjFLODJVUk1mRm9CP21iWSgxaHIzLlRMbywhL0MhUTFQJj1rYVdMVXAvWDRXL1Esc3VdLz86LGVDcy9aIVlnRmFdKXJTUW1ZZkRSXmlBamVfc0VRb2BPQnFzdS9DdSslTmMhMFkjci9LV1MqbSQ9am4jLjJdRklnIzllRDF0Z3EjZiU5UyJUfj5lbmRzdHJlYW0KZW5kb2JqCjE0IDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDQ0Mgo+PgpzdHJlYW0KR2F0PSU5aSZWaydZTyNmP0AjZilQVjBEa0MubyU1JnNGQiRwOi1JQz8jV05RZ2hvRGVyOXFASyEvMU9janNBOVw0Izs6QDZjJFg1YnFpKXFBZyoscSdeLUNOLHVFQCcrblhfUiouLzMvTFJicTBuWWtdYFNyNCNpNVJRPko5VFlXIkY8PzNRVE4zWFQyNT0xUGk+JUhLSDtBJltZOkFeOFhDM0RzR0ZXTVczJFdtRFhbJG5iS1YnRUBULlF0KkJwRChpIkEtPDZLTmNRJDBaJlM9I0Q8YCQ7QWoiU1pWdEkobmYnOlxXNmZmdSouYFQ4TypGIVhEYEdkNFZyJDpwbCc6Wi82Sis6XDo7YTZQKHNVKmdBPFdvcWEkUENRNmd1UmZCVG5TIW1TMEE1TWpyS3NjWV9bb0JCc0xhKFtKbE9bb2pkM2tmU2FHVyU7QCNNSG9CVWUjVDYwcCw0OWtxKDtAQ3FnZXVrL0JkPWtvRyx1Z2pPZVQlJ1orJjRdInJqO183JWk7Mj1qRzBLcCVqITEuSTM8XG4/Jj5vR25jZmgpLChgP1lZalVRMFhEK2poZnBkcEkhKi9+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDE1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA3MyAwMDAwMCBuIAowMDAwMDAwMTM0IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDQ0NiAwMDAwMCBuIAowMDAwMDAwNTU4IDAwMDAwIG4gCjAwMDAwMDA2NDEgMDAwMDAgbiAKMDAwMDAwMDc0NiAwMDAwMCBuIAowMDAwMDAwOTUxIDAwMDAwIG4gCjAwMDAwMDExNTYgMDAwMDAgbiAKMDAwMDAwMTIyNSAwMDAwMCBuIAowMDAwMDAxNTA5IDAwMDAwIG4gCjAwMDAwMDE1ODEgMDAwMDAgbiAKMDAwMDAwMTczMCAwMDAwMCBuIAowMDAwMDAyNzAxIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPGM1ZjU5ZWQ1NzcxMTJkYmM1ZGVmMTEyMGFiYmI0NGFmPjxjNWY1OWVkNTc3MTEyZGJjNWRlZjExMjBhYmJiNDRhZj5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChodHRwOi8vd3d3LnJlcG9ydGxhYi5jb20pCgovSW5mbyAxMCAwIFIKL1Jvb3QgOSAwIFIKL1NpemUgMTUKPj4Kc3RhcnR4cmVmCjMyMzQKJSVFT0YK", "Anna"),
@@ -63,15 +81,52 @@ public class DocumentService {
         return document == null ? null : document.getStatus();
     }
 
-    public DocumentDto addDocument(DocumentDto document){
+/*    public DocumentDto addDocument(DocumentDto document){
         document.setCreateAt(new java.util.Date());
-        System.out.println(document.getCreateAt());
         Document doc = documentMapper.toEntity(document);
-        System.out.println(doc.getCreateAt());
         Document savedDoc = documentRepository.save(doc);
-        System.out.println(savedDoc.getCreateAt());
         redisTemplate.opsForValue().set(String.valueOf(document.getId()), document, 10,  TimeUnit.MINUTES);
         return documentMapper.toDto(savedDoc);
+    }*/
+
+    @Transactional
+    public DocumentDto addDocument(DocumentDto documentDto) {
+
+        Document saved = documentRepository.save(documentMapper.toEntity(documentDto));
+        OutboxEvent event = null;
+        String uuid = UUID.randomUUID().toString();
+        try {
+            event = OutboxEvent.builder()
+                    .id(uuid)
+                    .aggregateId(saved.getId())
+                    .eventType("DOCUMENT_CREATED")
+                    .payload(objectMapper.writeValueAsString(saved))
+                    .status(OutboxStatusEnum.NEW)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            outboxEventRepository.save(event);
+
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+
+        return documentMapper.toDto(saved);
+    }
+
+    @Scheduled(fixedDelay = 5000)
+    public void publishOutboxEvents() {
+        List<OutboxEvent> events =
+                outboxEventRepository.findTop10ByStatusOrderByCreatedAt(OutboxStatusEnum.NEW);
+
+        for (OutboxEvent event : events) {
+            try {
+                kafkaProducerService.sendMessage("documents-topic", event.getPayload());
+                event.setStatus(OutboxStatusEnum.SENT);
+            } catch (Exception ex) {
+                event.setStatus(OutboxStatusEnum.FAILED);
+            }
+            outboxEventRepository.save(event);
+        }
     }
 
     public String updateStatusById(Long id, String statusNew){

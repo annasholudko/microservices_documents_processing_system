@@ -27,7 +27,9 @@ public class KafkaConsumerService {
 
     @KafkaListener(topics = "documents-topic", groupId = "documents-group")
     public void listenDocUploading(String message) {
-        try {
+        logger.info("Document event received: "+ message);
+        System.err.println("received ");
+/*        try {
             ObjectMapper objectMapper = new ObjectMapper();
             Document doc = objectMapper.readValue(message, Document.class);
             logger.info("Processing document: " + doc.getId());
@@ -40,6 +42,6 @@ public class KafkaConsumerService {
             throw new RuntimeException(e);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
-        }
+        }*/
     }
 }
