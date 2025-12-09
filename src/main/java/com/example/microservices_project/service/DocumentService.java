@@ -72,7 +72,7 @@ public class DocumentService {
         }
 
         // 3. Кладемо в Redis з TTL 10 хв
-        redisTemplate.opsForValue().set(key, document, 10, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(key, documentDto, 10, TimeUnit.MINUTES);
         return documentMapper.toDto(document);
     }
 
@@ -103,6 +103,9 @@ public class DocumentService {
                     .payload(objectMapper.writeValueAsString(saved))
                     .status(OutboxStatusEnum.NEW)
                     .createdAt(LocalDateTime.now())
+                    .aggregateType("DOCUMENT")
+                    .attempts(0)
+                    .lastAttemptAt(null)
                     .build();
             outboxEventRepository.save(event);
 
@@ -113,21 +116,6 @@ public class DocumentService {
         return documentMapper.toDto(saved);
     }
 
-    @Scheduled(fixedDelay = 5000)
-    public void publishOutboxEvents() {
-        List<OutboxEvent> events =
-                outboxEventRepository.findTop10ByStatusOrderByCreatedAt(OutboxStatusEnum.NEW);
-
-        for (OutboxEvent event : events) {
-            try {
-                kafkaProducerService.sendMessage("documents-topic", event.getPayload());
-                event.setStatus(OutboxStatusEnum.SENT);
-            } catch (Exception ex) {
-                event.setStatus(OutboxStatusEnum.FAILED);
-            }
-            outboxEventRepository.save(event);
-        }
-    }
 
     public String updateStatusById(Long id, String statusNew){
         DocumentDto document = getDocumentById(id);

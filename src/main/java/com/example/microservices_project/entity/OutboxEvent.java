@@ -6,8 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.Date;
-import java.util.UUID;
 
 @Entity
 @Table(name = "outbox_events")
@@ -31,19 +29,27 @@ public class OutboxEvent {
 
     private LocalDateTime createdAt;
 
-    public OutboxEvent(String id, Long aggregateId, String eventType, String payload, OutboxStatusEnum status, LocalDateTime createdAt) {
+    private String aggregateType;
+    private Integer attempts;
+    private LocalDateTime lastAttemptAt;
+
+
+    public OutboxEvent() {
+    }
+
+    public OutboxEvent(String id, Long aggregateId, String eventType, String payload, OutboxStatusEnum status, LocalDateTime createdAt, String aggregateType, Integer attempts, LocalDateTime lastAttemptAt) {
         this.id = id;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.payload = payload;
         this.status = status;
         this.createdAt = createdAt;
+        this.aggregateType = aggregateType;
+        this.attempts = attempts;
+        this.lastAttemptAt = lastAttemptAt;
     }
 
-    public OutboxEvent() {
-    }
-
-    public String getId() {
+/*    public String getId() {
         return id;
     }
 
@@ -89,6 +95,45 @@ public class OutboxEvent {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }*/
+
+    @Override
+    public String toString() {
+        return "OutboxEvent{" +
+                "id='" + id + '\'' +
+                ", aggregateId=" + aggregateId +
+                ", eventType='" + eventType + '\'' +
+                ", payload='" + payload + '\'' +
+                ", status=" + status +
+                ", createdAt=" + createdAt +
+                ", aggregateType='" + aggregateType + '\'' +
+                ", attempts=" + attempts +
+                ", lastAttemptAt=" + lastAttemptAt +
+                '}';
     }
+
+    /*public String getAggregateType() {
+        return aggregateType;
+    }
+
+    public void setAggregateType(String aggregateType) {
+        this.aggregateType = aggregateType;
+    }
+
+    public Integer getAttempts() {
+        return attempts;
+    }
+
+    public void setAttempts(Integer attempts) {
+        this.attempts = attempts;
+    }*/
+
+   /* public LocalDateTime getLastAttemptAt() {
+        return lastAttemptAt;
+    }
+
+    public void setLastAttemptAt(LocalDateTime lastAttemptAt) {
+        this.lastAttemptAt = lastAttemptAt;
+    }*/
 }
 

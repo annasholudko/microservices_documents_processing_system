@@ -28,20 +28,18 @@ public class KafkaConsumerService {
     @KafkaListener(topics = "documents-topic", groupId = "documents-group")
     public void listenDocUploading(String message) {
         logger.info("Document event received: "+ message);
-        System.err.println("received ");
-/*        try {
+        System.err.println("message received ");
+        try {
             ObjectMapper objectMapper = new ObjectMapper();
             Document doc = objectMapper.readValue(message, Document.class);
             logger.info("Processing document: " + doc.getId());
-            Thread.sleep(1000);
-            String res  = documentService.updateStatusById(Long.valueOf(doc.getId()), StatusEnum.DONE.toString());
+            String res  = documentService.updateStatusById(doc.getId(), StatusEnum.DONE.name());
             if ("OK".equals(res)){
-                logger.info("Status was updated");
+                logger.info("document updated");
             }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
-        }*/
+        }
+
     }
 }
