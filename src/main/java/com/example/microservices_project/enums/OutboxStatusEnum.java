@@ -5,5 +5,6 @@ public enum OutboxStatusEnum {
     PENDING,
     PROCESSING,
     SENT,
+    DLQ,
     FAILED
 }

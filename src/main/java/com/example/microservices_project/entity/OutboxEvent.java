@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Data;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -26,18 +28,17 @@ public class OutboxEvent {
 
     @Enumerated(EnumType.STRING)
     private OutboxStatusEnum status;
-
-    private LocalDateTime createdAt;
-
+    private Timestamp createdAt;
     private String aggregateType;
     private Integer attempts;
-    private LocalDateTime lastAttemptAt;
+    private Timestamp lastAttemptAt;
+    private Timestamp nextAttemptAt;
 
 
     public OutboxEvent() {
     }
 
-    public OutboxEvent(String id, Long aggregateId, String eventType, String payload, OutboxStatusEnum status, LocalDateTime createdAt, String aggregateType, Integer attempts, LocalDateTime lastAttemptAt) {
+    public OutboxEvent(String id, Long aggregateId, String eventType, String payload, OutboxStatusEnum status, Timestamp createdAt, String aggregateType, Integer attempts, Timestamp lastAttemptAt, Timestamp nextAttemptAt) {
         this.id = id;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
@@ -47,6 +48,7 @@ public class OutboxEvent {
         this.aggregateType = aggregateType;
         this.attempts = attempts;
         this.lastAttemptAt = lastAttemptAt;
+        this.nextAttemptAt = nextAttemptAt;
     }
 
 /*    public String getId() {

@@ -15,6 +15,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -102,7 +104,7 @@ public class DocumentService {
                     .eventType("DOCUMENT_CREATED")
                     .payload(objectMapper.writeValueAsString(saved))
                     .status(OutboxStatusEnum.NEW)
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(new Timestamp(System.currentTimeMillis()))
                     .aggregateType("DOCUMENT")
                     .attempts(0)
                     .lastAttemptAt(null)

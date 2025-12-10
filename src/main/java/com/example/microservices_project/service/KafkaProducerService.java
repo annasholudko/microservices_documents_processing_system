@@ -12,6 +12,9 @@ public class KafkaProducerService {
     }
 
     public void sendMessage(String topic, String message) {
+       /* if ("documents-topic".equals(topic)) {
+            throw new RuntimeException("Simulated Kafka failure");
+        }*/
         kafkaTemplate.send(topic, message);
         System.out.println("Sent: " + message);
     }
