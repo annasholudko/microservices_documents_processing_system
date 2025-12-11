@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -21,60 +22,75 @@ public class OutboxProcessorService {
     private OutboxEventRepository outboxEventRepository;
     private KafkaProducerService kafkaProducerService;
     private final Integer MAX_ATTEMPTS = 2;//5
+    private final Integer BATCH_SIZE = 2;//5
+
+    @Qualifier("outboxExecutor")
+    private ThreadPoolTaskExecutor executor;
     @Qualifier("jacksonObjectMapper")
     private ObjectMapper objectMapper;
     private OutboxDLQRepository outboxDLQRepository;
 
-    public OutboxProcessorService(OutboxEventRepository outboxEventRepository, KafkaProducerService kafkaProducerService, OutboxDLQRepository outboxDLQRepository, ObjectMapper objectMapper) {
+    public OutboxProcessorService(OutboxEventRepository outboxEventRepository, KafkaProducerService kafkaProducerService, ThreadPoolTaskExecutor executor, ObjectMapper objectMapper, OutboxDLQRepository outboxDLQRepository) {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaProducerService = kafkaProducerService;
-        this.outboxDLQRepository = outboxDLQRepository;
+        this.executor = executor;
         this.objectMapper = objectMapper;
+        this.outboxDLQRepository = outboxDLQRepository;
     }
 
 
     @Scheduled(fixedDelay = 5000)
     public void publishOutboxEvents() {
-        System.out.println("publishOutboxEvents");
-        List<OutboxEvent> events =
-                outboxEventRepository.findTop10ByStatusOrderByCreatedAt(OutboxStatusEnum.NEW);
+        List<OutboxEvent> pendingEvents = outboxEventRepository.findByStatus(OutboxStatusEnum.NEW);
 
-        for (OutboxEvent event : events) {
+        // розбиваємо на батчі
+        for (int i = 0; i < pendingEvents.size(); i += BATCH_SIZE) {
+            List<OutboxEvent> batch = pendingEvents.subList(i, Math.min(i + BATCH_SIZE, pendingEvents.size()));
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    processBatch(batch);
+                }
+            });
+        }
+        System.err.println("end publish");
+    }
+
+    private void processBatch(List<OutboxEvent> batch) {
+        for (OutboxEvent event : batch) {
             scheduleRetry(event);
-      /*      try {
-                event.setStatus(OutboxStatusEnum.PROCESSING);
-                outboxEventRepository.save(event);
-                kafkaProducerService.sendMessage("documents-topic", event.getPayload());
-                event.setStatus(OutboxStatusEnum.SENT);
-            } catch (Exception ex) {
-                event.setStatus(OutboxStatusEnum.FAILED);
-                event.setLastAttemptAt(LocalDateTime.now());
-                event.setAttempts(event.getAttempts() + 1);
-            }
-            outboxEventRepository.save(event);
-            System.out.println("saved");*/
         }
     }
+
+
 
     @Scheduled(fixedDelay = 5000)
     public void handleFailedEvents() {
-        System.out.println("publishOutboxEvents");
-        List<OutboxEvent> events =
-                outboxEventRepository.findTop10ByStatusOrderByCreatedAt(OutboxStatusEnum.FAILED);
+        List<OutboxEvent> pendingEvents = outboxEventRepository.findByStatus(OutboxStatusEnum.FAILED);
 
-        for (OutboxEvent event : events) {
-            if (event.getAttempts() < MAX_ATTEMPTS && new Timestamp(System.currentTimeMillis()).after(event.getNextAttemptAt())) {//nextAttemptAt <= now
-                // ще можна робити retry → залишаємо статус FAILED і ставимо nextAttemptAt
-                scheduleRetry(event);
-            } else {
-                // спроби вичерпані → переносимо в DLQ
-                moveToDLQ(event);
-            }
+        // розбиваємо на батчі
+        for (int i = 0; i < pendingEvents.size(); i += BATCH_SIZE) {
+            List<OutboxEvent> batch = pendingEvents.subList(i, Math.min(i + BATCH_SIZE, pendingEvents.size()));
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    for (OutboxEvent event : batch) {
+                        if (event.getAttempts() < MAX_ATTEMPTS
+                                && (event.getNextAttemptAt() == null || new Timestamp(System.currentTimeMillis()).after(event.getNextAttemptAt()))) {//nextAttemptAt <= now
+                            // ще можна робити retry → залишаємо статус FAILED і ставимо nextAttemptAt
+                            scheduleRetry(event);
+                        } else {
+                            // спроби вичерпані → переносимо в DLQ
+                            moveToDLQ(event);
+                        }
+                    }
+                }
+            });
         }
+        System.err.println("end failed");
     }
 
     private void scheduleRetry(OutboxEvent event){
-        System.out.println("scheduleRetry");
         try {
             event.setStatus(OutboxStatusEnum.PROCESSING);
             outboxEventRepository.save(event);
@@ -91,11 +107,7 @@ public class OutboxProcessorService {
     }
 
     private void moveToDLQ(OutboxEvent outboxEvent){
-        System.out.println("moveToDLQ");
         try {
-           /* ObjectMapper mapper = new ObjectMapper();
-            mapper.registerModule(new JavaTimeModule());
-            mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);*/
 
             String payloadJson = objectMapper.writeValueAsString(outboxEvent);
             OutboxDLQ outboxDLQ = OutboxDLQ.builder()
@@ -108,7 +120,6 @@ public class OutboxProcessorService {
 
             outboxEvent.setStatus(OutboxStatusEnum.DLQ);
             outboxEventRepository.save(outboxEvent);
-            System.out.println("saved ");
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

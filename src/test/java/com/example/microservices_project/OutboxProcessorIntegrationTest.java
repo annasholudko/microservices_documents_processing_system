@@ -13,6 +13,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -44,7 +45,7 @@ class OutboxProcessorIntegrationTest {
                 .eventType("DOCUMENT_CREATED")
                 .payload("{ \"documentId\": 1 }")
                 .status(OutboxStatusEnum.NEW)
-                .createdAt(LocalDateTime.now())
+                .createdAt(new Timestamp(System.currentTimeMillis()))
                 .aggregateType("DOCUMENT")
                 .attempts(0)
                 .lastAttemptAt(null)
