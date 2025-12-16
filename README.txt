@@ -90,8 +90,8 @@ Spring Kafka
 Kafka Consumer API
 Retry / Backoff
 Dead Letter Queue (DLQ)
+Docker (conceptual for local and production setup)
 
-Docker
 Event Consumption Flow
 DocumentCreatedEvent is published to Kafka
 Document Processor consumes the event
@@ -124,11 +124,16 @@ entity      - JPA entities
 repository   - JPA repositories
 service     - processing logic
 
-Docker and Local Run
-Both microservices and infrastructure components (MySQL, Redis, Kafka) are containerized.
-
+Docker and Local Run (Conceptual)
+Both microservices and infrastructure components (MySQL, Redis, Kafka) can be containerized.
+Build services:
 mvn clean package
+
+Start with Docker Compose (conceptual):
 docker-compose up --build
+
+
+Note: Docker setup is shown conceptually for demonstration purposes; local execution may require a modern Docker environment.
 
 This project demonstrates:
 Real-world Kafka-based microservices
