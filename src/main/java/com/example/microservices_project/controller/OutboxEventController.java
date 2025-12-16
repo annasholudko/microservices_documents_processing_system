@@ -1,7 +1,6 @@
 package com.example.microservices_project.controller;
 
 import com.example.microservices_project.dto.OutboxDLQDto;
-import com.example.microservices_project.entity.OutboxDLQ;
 import com.example.microservices_project.service.OutboxProcessorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

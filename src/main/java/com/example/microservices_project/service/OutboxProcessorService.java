@@ -21,8 +21,8 @@ import java.util.List;
 public class OutboxProcessorService {
     private OutboxEventRepository outboxEventRepository;
     private KafkaProducerService kafkaProducerService;
-    private final Integer MAX_ATTEMPTS = 2;//5
-    private final Integer BATCH_SIZE = 2;//5
+    private final Integer MAX_ATTEMPTS = 5;
+    private final Integer BATCH_SIZE = 5;
 
     @Qualifier("outboxExecutor")
     private ThreadPoolTaskExecutor executor;
@@ -43,7 +43,6 @@ public class OutboxProcessorService {
     public void publishOutboxEvents() {
         List<OutboxEvent> pendingEvents = outboxEventRepository.findByStatus(OutboxStatusEnum.NEW);
 
-        // розбиваємо на батчі
         for (int i = 0; i < pendingEvents.size(); i += BATCH_SIZE) {
             List<OutboxEvent> batch = pendingEvents.subList(i, Math.min(i + BATCH_SIZE, pendingEvents.size()));
             executor.submit(new Runnable() {
@@ -53,7 +52,6 @@ public class OutboxProcessorService {
                 }
             });
         }
-        System.err.println("end publish");
     }
 
     private void processBatch(List<OutboxEvent> batch) {
@@ -68,7 +66,6 @@ public class OutboxProcessorService {
     public void handleFailedEvents() {
         List<OutboxEvent> pendingEvents = outboxEventRepository.findByStatus(OutboxStatusEnum.FAILED);
 
-        // розбиваємо на батчі
         for (int i = 0; i < pendingEvents.size(); i += BATCH_SIZE) {
             List<OutboxEvent> batch = pendingEvents.subList(i, Math.min(i + BATCH_SIZE, pendingEvents.size()));
             executor.submit(new Runnable() {
@@ -77,17 +74,14 @@ public class OutboxProcessorService {
                     for (OutboxEvent event : batch) {
                         if (event.getAttempts() < MAX_ATTEMPTS
                                 && (event.getNextAttemptAt() == null || new Timestamp(System.currentTimeMillis()).after(event.getNextAttemptAt()))) {//nextAttemptAt <= now
-                            // ще можна робити retry → залишаємо статус FAILED і ставимо nextAttemptAt
                             scheduleRetry(event);
                         } else {
-                            // спроби вичерпані → переносимо в DLQ
                             moveToDLQ(event);
                         }
                     }
                 }
             });
         }
-        System.err.println("end failed");
     }
 
     private void scheduleRetry(OutboxEvent event){
@@ -103,7 +97,6 @@ public class OutboxProcessorService {
         event.setNextAttemptAt(new Timestamp(System.currentTimeMillis() + event.getAttempts() * 5_000L));
         event.setAttempts(event.getAttempts() + 1);
         outboxEventRepository.save(event);
-        System.out.println("saved "+event.getStatus());
     }
 
     private void moveToDLQ(OutboxEvent outboxEvent){
