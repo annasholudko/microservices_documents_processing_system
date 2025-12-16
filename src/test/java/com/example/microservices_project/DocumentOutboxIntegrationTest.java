@@ -28,11 +28,9 @@ class DocumentOutboxIntegrationTest {
         documentDto.setName("Test document");
         documentDto.setContent("Some content");
         documentDto.setStatus(StatusEnum.NEW.toString());
-        // when
         DocumentDto dtoSaved = documentService.addDocument(documentDto);
         Long documentId = dtoSaved.getId();
 
-        // then
         var outboxEvents = outboxEventRepository.findTop10ByStatusOrderByCreatedAt(OutboxStatusEnum.NEW);
 
         assertThat(outboxEvents).hasSize(1);
